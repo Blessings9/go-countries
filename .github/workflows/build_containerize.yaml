@@ -1,10 +1,9 @@
-name: Build and Push Go-Countries to GHCR (on tag)
+name: Build and Push Go-Countries to GHCR
 
 on:
   push:
     tags:
-      - "*"   # trigger only when a Git tag is pushed (e.g., v1.0.0)
-  workflow_dispatch:
+      - "*"   # only run on Git tags, e.g., v1.0.0
 
 jobs:
   build:
@@ -15,19 +14,23 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout code
+      # 1. Checkout the code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Set up Go
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
 
-      - name: Build binary
+      # 3. Build the Go binary
+      - name: Build Go binary
         run: |
           go mod download
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o go-countries .
 
+      # 4. Create Dockerfile
       - name: Create Dockerfile
         run: |
           cat > Dockerfile <<'EOF'
@@ -38,29 +41,32 @@ jobs:
           CMD ["/app/go-countries"]
           EOF
 
+      # 5. Log in to GitHub Container Registry
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-    
-      - name: Set image tags
+
+      # 6. Prepare image tags
+      - name: Set Docker image tags
         id: vars
         run: |
-          # Lowercase the username using shell
           REPO_OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
           IMAGE_NAME=ghcr.io/$REPO_OWNER/go-countries
-          # Get version tag from Git tag
-          VERSION_TAG=${GITHUB_REF#refs/tags/}
-          # Prepare newline-separated tags
-          echo "tags<<EOF" >> $GITHUB_OUTPUT
-          printf "%s\n" "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${VERSION_TAG}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          VERSION_TAG="${{ github.ref_name }}"
+
+          {
+          echo "tags<<EOF"
+          echo "${IMAGE_NAME}:latest"
+          echo "${IMAGE_NAME}:${VERSION_TAG}"
+          echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
 
-
-      - name: Build and push image
+      # 7. Build and push Docker image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
