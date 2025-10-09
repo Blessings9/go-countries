@@ -48,7 +48,7 @@ jobs:
       - name: Set image tags
         id: vars
         run: |
-          IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/go-countries
+          IMAGE_NAME=ghcr.io/${{ github.repository_owner | lower }}/go-countries
           VERSION_TAG=${GITHUB_REF#refs/tags/}
           # produce a newline-separated list of tags (accepted by docker/build-push-action)
           echo "tags<<EOF" >> $GITHUB_OUTPUT
