@@ -3,7 +3,8 @@ name: Build and Push Go-Countries to GHCR
 on:
   push:
     tags:
-      - "*"   # only run on Git tags, e.g., v1.0.0
+       branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
