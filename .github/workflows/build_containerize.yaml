@@ -2,8 +2,8 @@ name: Build and Push Go-Countries to GHCR
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    tags: - "*"
+
 
 jobs:
   build:
