@@ -48,12 +48,17 @@ jobs:
       - name: Set image tags
         id: vars
         run: |
-          IMAGE_NAME=ghcr.io/${{ github.repository_owner | lower }}/go-countries
+          # Lowercase the username using shell
+          REPO_OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_NAME=ghcr.io/$REPO_OWNER/go-countries
+          # Get version tag from Git tag
           VERSION_TAG=${GITHUB_REF#refs/tags/}
-          # produce a newline-separated list of tags (accepted by docker/build-push-action)
+          # Prepare newline-separated tags
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           printf "%s\n" "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${VERSION_TAG}" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+
 
       - name: Build and push image
         uses: docker/build-push-action@v6
