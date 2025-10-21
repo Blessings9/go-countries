@@ -6,7 +6,7 @@ import (
 )
 
 func home(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("The Economy is doing wonderfully"))
+	w.Write([]byte("The Economy is doing badd"))
 
 }
 func main() {
