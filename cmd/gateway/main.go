@@ -14,11 +14,23 @@ import (
 )
 
 var (
-	countryServiceURL = getenv("COUNTRY_SERVICE_URL", "http://localhost:8081")
+	// Base URL of the country-service only, e.g. http://localhost:8081
+	// The gateway adds the route itself (see countriesPath).
+	countryServiceURL = strings.TrimRight(os.Getenv("COUNTRY_SERVICE_URL"), "/")
 	client            = &http.Client{Timeout: 15 * time.Second}
 )
 
+// Route on country-service that looks up a country by name.
+const countriesPath = "/countries/"
+
 func main() {
+	if countryServiceURL == "" {
+		log.Fatal("COUNTRY_SERVICE_URL is not set (e.g. export COUNTRY_SERVICE_URL=http://localhost:8081)")
+	}
+	if u, err := url.Parse(countryServiceURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		log.Fatalf("COUNTRY_SERVICE_URL is not a valid http(s) URL: %q", countryServiceURL)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", welcome)
 	mux.HandleFunc("/country", country) // GET and POST handled inside
@@ -26,7 +38,7 @@ func main() {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	addr := ":" + getenv("PORT", "8081")
+	addr := ":" + getenv("PORT", "8080")
 	log.Printf("go-countries gateway listening on %s (country-service: %s)", addr, countryServiceURL)
 	log.Fatal(http.ListenAndServe(addr, cors(mux)))
 }
@@ -75,7 +87,7 @@ func country(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Forward to the second API.
-	resp, err := client.Get(countryServiceURL + "/countries/" + url.PathEscape(name))
+	resp, err := client.Get(countryServiceURL + countriesPath + url.PathEscape(name))
 	if err != nil {
 		log.Printf("country-service error: %v", err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "country-service unavailable"})

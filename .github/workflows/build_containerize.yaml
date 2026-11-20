@@ -13,32 +13,50 @@ jobs:
       contents: read
       packages: write
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: gateway           # ./cmd/gateway
+            image: go-countries-gateway
+            port: "8080"
+          - service: country-service   # ./cmd/country-service
+            image: go-countries-service
+            port: "8081"
+
     steps:
       # 1. Checkout the code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Set up Go
+      # 2. Set up Go (no third-party deps yet, so nothing to cache)
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: false
 
-      # 3. Build the Go binary
-      - name: Build Go binary
+      # 3. Vet everything, then build this service's binary
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build ${{ matrix.service }} binary
         run: |
-          go mod download
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o go-countries .
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -trimpath -ldflags="-s -w" -o app ./cmd/${{ matrix.service }}
 
-      # 4. Create Dockerfile
+      # 4. Create Dockerfile (same for both services; the binary is always called "app")
       - name: Create Dockerfile
         run: |
           cat > Dockerfile <<'EOF'
-          FROM alpine:3.14
+          FROM alpine:3.20
+          ARG PORT
+          RUN adduser -D -u 10001 app
           WORKDIR /app
-          COPY go-countries .
-          RUN chmod +x ./go-countries
-          CMD ["/app/go-countries"]
+          COPY app .
+          USER app
+          EXPOSE ${PORT}
+          CMD ["/app/app"]
           EOF
 
       # 5. Log in to GitHub Container Registry
@@ -54,23 +72,25 @@ jobs:
         id: vars
         run: |
           REPO_OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
-          IMAGE_NAME=ghcr.io/$REPO_OWNER/go-countries
-          VERSION_TAG="${{ github.ref_name }}"
+          IMAGE_NAME=ghcr.io/${REPO_OWNER}/${{ matrix.image }}
+          VERSION_TAG="${GITHUB_REF_NAME//\//-}"
+          SHORT_SHA="${GITHUB_SHA::7}"
 
           {
-          echo "tags<<EOF"
-          echo "${IMAGE_NAME}:latest"
-          echo "${IMAGE_NAME}:${VERSION_TAG}"
-          echo "EOF"
+            echo "tags<<TAGS_EOF"
+            echo "${IMAGE_NAME}:latest"
+            echo "${IMAGE_NAME}:${VERSION_TAG}"
+            echo "${IMAGE_NAME}:sha-${SHORT_SHA}"
+            echo "TAGS_EOF"
           } >> "$GITHUB_OUTPUT"
 
-
       # 7. Build and push Docker image
-      - name: Build and push Docker image
+      - name: Build and push ${{ matrix.image }}
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: ${{ steps.vars.outputs.tags }}
           file: ./Dockerfile
-
+          push: true
+          build-args: |
+            PORT=${{ matrix.port }}
+          tags: ${{ steps.vars.outputs.tags }}
